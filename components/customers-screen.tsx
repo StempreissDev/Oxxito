@@ -8,7 +8,6 @@ import { CustomerCard } from "@/components/customer-card"
 import { CustomerProfile } from "@/components/customer-profile"
 import { PaymentModal } from "@/components/payment-modal"
 import { SaleModal } from "@/components/sale-modal"
-import { CustomerModal } from "@/components/customer-modal"
 import { initialMovements, weeklyPayments, type Customer, type Movement } from "@/lib/customers"
 import { formatCurrency } from "@/lib/types"
 import { supabase } from "@/lib/supabase"
@@ -24,6 +23,8 @@ export function CustomersScreen() {
   const [selected, setSelected] = useState<Customer | null>(null)
   const [profileId, setProfileId] = useState<string | null>(null)
   const [collected, setCollected] = useState(0)
+  const [newName, setNewName] = useState("")
+  const [newPhone, setNewPhone] = useState("")
   
 useEffect(() => {
     async function fetchCustomers() {
@@ -266,11 +267,90 @@ useEffect(() => {
         onConfirm={handleConfirmSale}
         customer={selected}
       />
-      <CustomerModal
-        open={customerOpen}
-        onOpenChange={setCustomerOpen}
-        onSave={handleAddCustomer}
-      />
+      {customerOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center px-4 pb-6 sm:items-center sm:pb-0"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="new-customer-title"
+        >
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" aria-hidden="true" />
+
+          <div className="relative z-10 w-full max-w-md rounded-2xl border border-border bg-card px-6 py-6 shadow-xl">
+            <h2
+              id="new-customer-title"
+              className="mb-1 text-xl font-bold tracking-tight text-foreground"
+            >
+              Agregar Cliente
+            </h2>
+            <p className="mb-5 text-sm text-muted-foreground">
+              Registra un nuevo cliente para tu cartera.
+            </p>
+
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault()
+                if (!newName.trim()) return
+                await handleAddCustomer({ name: newName.trim(), phone: newPhone.trim() })
+                setNewName("")
+                setNewPhone("")
+              }}
+              className="flex flex-col gap-4"
+            >
+              <div className="flex flex-col gap-1.5">
+                <label htmlFor="inline-name" className="text-sm font-medium text-foreground">
+                  Nombre completo
+                </label>
+                <input
+                  id="inline-name"
+                  type="text"
+                  value={newName}
+                  onChange={(e) => setNewName(e.target.value)}
+                  placeholder="Ej. María Fernanda López"
+                  autoFocus
+                  className="h-10 w-full rounded-xl border border-input bg-background px-3 text-sm text-foreground placeholder:text-muted-foreground/60 outline-none transition-colors focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring"
+                />
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label htmlFor="inline-phone" className="text-sm font-medium text-foreground">
+                  Teléfono
+                </label>
+                <input
+                  id="inline-phone"
+                  type="tel"
+                  inputMode="tel"
+                  value={newPhone}
+                  onChange={(e) => setNewPhone(e.target.value)}
+                  placeholder="55 1234 5678"
+                  className="h-10 w-full rounded-xl border border-input bg-background px-3 text-sm text-foreground placeholder:text-muted-foreground/60 outline-none transition-colors focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring"
+                />
+              </div>
+
+              <div className="mt-1 flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCustomerOpen(false)
+                    setNewName("")
+                    setNewPhone("")
+                  }}
+                  className="flex-1 rounded-xl border border-border bg-secondary py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-secondary/80"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={!newName.trim()}
+                  className="flex-1 rounded-xl bg-primary py-2.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Guardar
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </main>
     
   )

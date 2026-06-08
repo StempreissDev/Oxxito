@@ -12,7 +12,8 @@ import {
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { type Customer } from "@/lib/customers"
-import { initialProducts, formatCurrency, type Product } from "@/lib/types"
+import { formatCurrency, type Product } from "@/lib/types"
+import { supabase } from "@/lib/supabase"
 import { cn } from "@/lib/utils"
 
 type SaleModalProps = {
@@ -23,7 +24,6 @@ type SaleModalProps = {
     sale: { total: number; productName: string; quantity: number },
   ) => void
   customer?: Customer | null
-  products?: Product[]
 }
 
 export function SaleModal({
@@ -31,18 +31,46 @@ export function SaleModal({
   onOpenChange,
   onConfirm,
   customer,
-  products = initialProducts,
 }: SaleModalProps) {
+  const [products, setProducts] = useState<Product[]>([])
   const [query, setQuery] = useState("")
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [quantity, setQuantity] = useState(1)
+  const [saleError, setSaleError] = useState<string | null>(null)
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
   useEffect(() => {
-    if (open) {
-      setQuery("")
-      setSelectedId(null)
-      setQuantity(1)
+    if (!open) return
+    setQuery("")
+    setSelectedId(null)
+    setQuantity(1)
+    setSaleError(null)
+    setIsSubmitting(false)
+
+    async function fetchProducts() {
+      const { data, error } = await supabase
+        .from("productos")
+        .select("*")
+        .gt("stock", 0)
+
+      if (error) {
+        console.error("Error al cargar productos:", error.message)
+        return
+      }
+
+      if (data) {
+        setProducts(
+          data.map((p: any) => ({
+            id: p.id,
+            name: p.nombre,
+            price: Number(p.precio),
+            stock: p.stock,
+          }))
+        )
+      }
     }
+
+    fetchProducts()
   }, [open])
 
   const selected = useMemo(
@@ -78,8 +106,43 @@ export function SaleModal({
     setQuantity((q) => Math.min(maxQty, q + 1))
   }
 
-  function handleConfirm() {
+  async function handleConfirm() {
     if (!selected || !customer) return
+
+    if (quantity > selected.stock) {
+      setSaleError(`Stock insuficiente. Solo hay ${selected.stock} unidad${selected.stock === 1 ? "" : "es"} disponible${selected.stock === 1 ? "" : "s"}.`)
+      return
+    }
+
+    setIsSubmitting(true)
+    setSaleError(null)
+
+    const { error: ventaError } = await supabase
+      .from("ventas")
+      .insert([{
+        cliente_id: customer.id,
+        producto_id: selected.id,
+        cantidad: quantity,
+        total,
+      }])
+
+    if (ventaError) {
+      setSaleError("No se pudo registrar la venta. Intenta de nuevo.")
+      setIsSubmitting(false)
+      return
+    }
+
+    const { error: stockError } = await supabase
+      .from("productos")
+      .update({ stock: selected.stock - quantity })
+      .eq("id", selected.id)
+
+    if (stockError) {
+      setSaleError("Venta registrada pero no se pudo actualizar el stock.")
+      setIsSubmitting(false)
+      return
+    }
+
     onConfirm(customer.id, {
       total,
       productName: selected.name,
@@ -221,12 +284,20 @@ export function SaleModal({
             </div>
           </div>
 
+          {/* Error message */}
+          {saleError && (
+            <p className="mb-3 rounded-xl border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+              {saleError}
+            </p>
+          )}
+
           {/* Actions */}
           <div className="flex items-center gap-3">
             <Button
               type="button"
               variant="secondary"
               onClick={() => onOpenChange(false)}
+              disabled={isSubmitting}
               className="flex-1 rounded-xl"
             >
               Cancelar
@@ -234,11 +305,11 @@ export function SaleModal({
             <Button
               type="button"
               onClick={handleConfirm}
-              disabled={!selected}
+              disabled={!selected || isSubmitting}
               className="flex-1 gap-1.5 rounded-xl"
             >
               <Check className="size-4" />
-              Confirmar Venta
+              {isSubmitting ? "Guardando…" : "Confirmar Venta"}
             </Button>
           </div>
         </div>
