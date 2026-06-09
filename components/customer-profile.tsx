@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import {
   ArrowLeft,
   Phone,
@@ -9,17 +9,25 @@ import {
   CheckCircle2,
   AlertCircle,
   PackageOpen,
-  ArrowDownLeft,
-  ArrowUpRight,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { type Customer, type Movement } from "@/lib/customers"
+import { type Customer } from "@/lib/customers"
 import { formatCurrency } from "@/lib/types"
+import { supabase } from "@/lib/supabase"
 import { cn } from "@/lib/utils"
+
+type Movement = {
+  id: string
+  type: "compra" | "abono"
+  date: string
+  amount: number
+  productName?: string
+  quantity?: number
+}
 
 type CustomerProfileProps = {
   customer: Customer
-  movements: Movement[]
+  refreshKey?: number
   onBack: () => void
   onRegisterPayment: (customer: Customer) => void
   onNewSale: (customer: Customer) => void
@@ -33,44 +41,71 @@ const TABS: { key: Filter; label: string }[] = [
   { key: "abonos", label: "Abonos" },
 ]
 
-function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString("es-MX", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  })
-}
-
-function formatTime(iso: string) {
-  return new Date(iso).toLocaleTimeString("es-MX", {
-    hour: "2-digit",
-    minute: "2-digit",
-  })
+function formatDateTime(iso: string) {
+  const d = new Date(iso)
+  const day = String(d.getDate()).padStart(2, "0")
+  const month = String(d.getMonth() + 1).padStart(2, "0")
+  const year = d.getFullYear()
+  const hours = String(d.getHours()).padStart(2, "0")
+  const mins = String(d.getMinutes()).padStart(2, "0")
+  return `${day}/${month}/${year} ${hours}:${mins}`
 }
 
 export function CustomerProfile({
   customer,
-  movements,
+  refreshKey,
   onBack,
   onRegisterPayment,
   onNewSale,
 }: CustomerProfileProps) {
+  const [movements, setMovements] = useState<Movement[]>([])
   const [filter, setFilter] = useState<Filter>("todo")
   const hasDebt = customer.balance > 0
 
-  const sorted = useMemo(
-    () =>
-      [...movements].sort(
-        (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
-      ),
-    [movements],
-  )
+  useEffect(() => {
+    async function fetchMovements() {
+      const [ventasResult, abonosResult] = await Promise.all([
+        supabase
+          .from("ventas")
+          .select("id, total, cantidad, fecha_venta, productos(nombre)")
+          .eq("cliente_id", customer.id),
+        supabase
+          .from("abonos")
+          .select("id, monto, fecha_abono")
+          .eq("cliente_id", customer.id),
+      ])
+
+      const compras: Movement[] = (ventasResult.data ?? []).map((v: any) => ({
+        id: v.id,
+        type: "compra" as const,
+        date: v.fecha_venta,
+        amount: Number(v.total),
+        productName: v.productos?.nombre,
+        quantity: v.cantidad,
+      }))
+
+      const abonos: Movement[] = (abonosResult.data ?? []).map((a: any) => ({
+        id: a.id,
+        type: "abono" as const,
+        date: a.fecha_abono,
+        amount: Number(a.monto),
+      }))
+
+      setMovements(
+        [...compras, ...abonos].sort(
+          (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
+        ),
+      )
+    }
+
+    fetchMovements()
+  }, [customer.id, refreshKey])
 
   const filtered = useMemo(() => {
-    if (filter === "compras") return sorted.filter((m) => m.type === "compra")
-    if (filter === "abonos") return sorted.filter((m) => m.type === "abono")
-    return sorted
-  }, [sorted, filter])
+    if (filter === "compras") return movements.filter((m) => m.type === "compra")
+    if (filter === "abonos") return movements.filter((m) => m.type === "abono")
+    return movements
+  }, [movements, filter])
 
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-md flex-col bg-background">
@@ -238,14 +273,14 @@ function TimelineItem({ movement, last }: { movement: Movement; last: boolean })
           "z-[1] flex size-8 shrink-0 items-center justify-center rounded-full",
           isPayment
             ? "bg-accent/15 text-accent"
-            : "bg-secondary text-muted-foreground",
+            : "bg-amber-500/15 text-amber-400",
         )}
         aria-hidden="true"
       >
         {isPayment ? (
-          <ArrowDownLeft className="size-4" />
+          <HandCoins className="size-4" />
         ) : (
-          <ArrowUpRight className="size-4" />
+          <ShoppingCart className="size-4" />
         )}
       </span>
 
@@ -254,10 +289,10 @@ function TimelineItem({ movement, last }: { movement: Movement; last: boolean })
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <p className="text-sm font-medium text-foreground">
-              {isPayment ? "Abono recibido" : movement.productName}
+              {isPayment ? "Abono recibido" : (movement.productName ?? "Producto")}
             </p>
             <p className="mt-0.5 text-xs text-muted-foreground">
-              {formatDate(movement.date)} · {formatTime(movement.date)}
+              {formatDateTime(movement.date)}
               {!isPayment && movement.quantity ? ` · ${movement.quantity} u` : ""}
             </p>
           </div>
@@ -267,7 +302,6 @@ function TimelineItem({ movement, last }: { movement: Movement; last: boolean })
               isPayment ? "text-accent" : "text-foreground",
             )}
           >
-            {isPayment ? "+" : "+"}
             {formatCurrency(movement.amount)}
           </span>
         </div>

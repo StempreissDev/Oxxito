@@ -143,6 +143,17 @@ export function SaleModal({
       return
     }
 
+    const { error: saldoError } = await supabase
+      .from("clientes")
+      .update({ saldo_pendiente: customer.balance + total })
+      .eq("id", customer.id)
+
+    if (saldoError) {
+      setSaleError("Venta y stock actualizados, pero no se pudo actualizar el saldo del cliente.")
+      setIsSubmitting(false)
+      return
+    }
+
     onConfirm(customer.id, {
       total,
       productName: selected.name,

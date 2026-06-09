@@ -1,7 +1,13 @@
 "use client"
 
-import { Phone, HandCoins, ShoppingCart, CheckCircle2, AlertCircle } from "lucide-react"
+import { Phone, HandCoins, ShoppingCart, CheckCircle2, AlertCircle, MoreVertical, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { type Customer } from "@/lib/customers"
 import { formatCurrency } from "@/lib/types"
 import { cn } from "@/lib/utils"
@@ -11,20 +17,21 @@ type CustomerCardProps = {
   onRegisterPayment: (customer: Customer) => void
   onNewSale: (customer: Customer) => void
   onOpenProfile: (customer: Customer) => void
+  onDelete: (customer: Customer) => void
 }
 
-export function CustomerCard({ customer, onRegisterPayment, onNewSale, onOpenProfile }: CustomerCardProps) {
+export function CustomerCard({ customer, onRegisterPayment, onNewSale, onOpenProfile, onDelete }: CustomerCardProps) {
   const hasDebt = customer.balance > 0
 
   return (
     <div className="flex flex-col gap-4 rounded-2xl border border-border bg-card p-4">
-      <button
-        type="button"
-        onClick={() => onOpenProfile(customer)}
-        className="flex items-start justify-between gap-3 rounded-lg text-left transition-opacity hover:opacity-80"
-        aria-label={`Ver perfil de ${customer.name}`}
-      >
-        <div className="min-w-0 flex-1">
+      <div className="flex items-start gap-3">
+        <button
+          type="button"
+          onClick={() => onOpenProfile(customer)}
+          className="min-w-0 flex-1 rounded-lg text-left transition-opacity hover:opacity-80"
+          aria-label={`Ver perfil de ${customer.name}`}
+        >
           <h3 className="truncate text-base font-semibold leading-tight text-card-foreground">
             {customer.name}
           </h3>
@@ -49,20 +56,38 @@ export function CustomerCard({ customer, onRegisterPayment, onNewSale, onOpenPro
               {hasDebt ? "Con deuda" : "Al corriente"}
             </span>
           </div>
-        </div>
+        </button>
 
-        <div className="shrink-0 text-right">
+        <div className="flex shrink-0 flex-col items-end gap-1">
           <p className="text-xs text-muted-foreground">Saldo pendiente</p>
           <p
             className={cn(
-              "mt-0.5 text-xl font-bold tracking-tight",
+              "text-xl font-bold tracking-tight",
               hasDebt ? "text-foreground" : "text-accent",
             )}
           >
             {formatCurrency(customer.balance)}
           </p>
         </div>
-      </button>
+
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            className="flex size-9 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            aria-label={`Acciones para ${customer.name}`}
+          >
+            <MoreVertical className="size-5" />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-48">
+            <DropdownMenuItem
+              onClick={() => onDelete(customer)}
+              className="text-destructive focus:text-destructive"
+            >
+              <Trash2 className="size-4" />
+              Eliminar cliente
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
 
       <div className="flex items-center gap-2.5">
         <Button

@@ -20,6 +20,9 @@ export function ProductsScreen() {
   const [fieldName, setFieldName] = useState("")
   const [fieldPrice, setFieldPrice] = useState("")
   const [fieldStock, setFieldStock] = useState("")
+  const [deleteTarget, setDeleteTarget] = useState<Product | null>(null)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
+  const [isDeleting, setIsDeleting] = useState(false)
 
   useEffect(() => {
     async function fetchProducts() {
@@ -115,7 +118,47 @@ export function ProductsScreen() {
   }
 
   function handleDelete(id: string) {
-    setProducts((prev) => prev.filter((p) => p.id !== id))
+    const product = products.find((p) => p.id === id) ?? null
+    setDeleteTarget(product)
+    setDeleteError(null)
+  }
+
+  async function confirmDelete() {
+    if (!deleteTarget) return
+    setIsDeleting(true)
+    setDeleteError(null)
+
+    const { count, error: countError } = await supabase
+      .from("ventas")
+      .select("id", { count: "exact", head: true })
+      .eq("producto_id", deleteTarget.id)
+
+    if (countError) {
+      setDeleteError("No se pudo verificar el producto. Intenta de nuevo.")
+      setIsDeleting(false)
+      return
+    }
+
+    if (count && count > 0) {
+      setDeleteError("Este producto tiene ventas registradas y no puede eliminarse.")
+      setIsDeleting(false)
+      return
+    }
+
+    const { error } = await supabase
+      .from("productos")
+      .delete()
+      .eq("id", deleteTarget.id)
+
+    if (error) {
+      setDeleteError("No se pudo eliminar el producto. Intenta de nuevo.")
+      setIsDeleting(false)
+      return
+    }
+
+    setProducts((prev) => prev.filter((p) => p.id !== deleteTarget.id))
+    setDeleteTarget(null)
+    setIsDeleting(false)
   }
 
   const filtered = useMemo(() => {
@@ -190,6 +233,56 @@ export function ProductsScreen() {
           </div>
         )}
       </section>
+
+      {/* Modal: Confirmar eliminación */}
+      {deleteTarget && (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center px-4 pb-6 sm:items-center sm:pb-0"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="delete-modal-title"
+        >
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" aria-hidden="true" />
+
+          <div className="relative z-10 w-full max-w-md rounded-2xl border border-border bg-card px-6 py-6 shadow-xl">
+            <h2
+              id="delete-modal-title"
+              className="mb-1 text-xl font-bold tracking-tight text-foreground"
+            >
+              Eliminar producto
+            </h2>
+            <p className="mb-5 text-sm text-muted-foreground">
+              ¿Estás seguro de eliminar{" "}
+              <span className="font-medium text-foreground">{deleteTarget.name}</span>? Esta acción no se puede deshacer.
+            </p>
+
+            {deleteError && (
+              <p className="mb-4 rounded-xl border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                {deleteError}
+              </p>
+            )}
+
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => { setDeleteTarget(null); setDeleteError(null) }}
+                disabled={isDeleting}
+                className="flex-1 rounded-xl border border-border bg-secondary py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-secondary/80 disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={confirmDelete}
+                disabled={isDeleting}
+                className="flex-1 rounded-xl bg-destructive py-2.5 text-sm font-medium text-white transition-colors hover:bg-destructive/90 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {isDeleting ? "Eliminando…" : "Sí, eliminar"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal: Nuevo / Editar Producto */}
       {modalOpen && (

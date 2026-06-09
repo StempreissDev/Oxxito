@@ -12,6 +12,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { type Customer } from "@/lib/customers"
 import { formatCurrency } from "@/lib/types"
+import { supabase } from "@/lib/supabase"
 
 type PaymentModalProps = {
   open: boolean
@@ -22,9 +23,15 @@ type PaymentModalProps = {
 
 export function PaymentModal({ open, onOpenChange, onConfirm, customer }: PaymentModalProps) {
   const [amount, setAmount] = useState("")
+  const [paymentError, setPaymentError] = useState<string | null>(null)
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
   useEffect(() => {
-    if (open) setAmount("")
+    if (open) {
+      setAmount("")
+      setPaymentError(null)
+      setIsSubmitting(false)
+    }
   }, [open])
 
   if (!customer) return null
@@ -32,9 +39,43 @@ export function PaymentModal({ open, onOpenChange, onConfirm, customer }: Paymen
   const parsed = Number.parseFloat(amount) || 0
   const remaining = Math.max(customer.balance - parsed, 0)
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
-    if (parsed <= 0 || !customer) return
+    if (!customer) return
+
+    if (parsed <= 0) {
+      setPaymentError("El monto debe ser mayor a 0.")
+      return
+    }
+    if (parsed > customer.balance) {
+      setPaymentError("El abono no puede ser mayor al saldo pendiente.")
+      return
+    }
+
+    setIsSubmitting(true)
+    setPaymentError(null)
+
+    const { error } = await supabase
+      .from("clientes")
+      .update({ saldo_pendiente: customer.balance - parsed })
+      .eq("id", customer.id)
+
+    if (error) {
+      setPaymentError("No se pudo registrar el abono. Intenta de nuevo.")
+      setIsSubmitting(false)
+      return
+    }
+
+    const { error: abonoError } = await supabase
+      .from("abonos")
+      .insert([{ cliente_id: customer.id, monto: parsed }])
+
+    if (abonoError) {
+      setPaymentError("Saldo actualizado pero no se pudo registrar el abono en el historial.")
+      setIsSubmitting(false)
+      return
+    }
+
     onConfirm(customer.id, parsed)
     onOpenChange(false)
   }
@@ -87,12 +128,18 @@ export function PaymentModal({ open, onOpenChange, onConfirm, customer }: Paymen
             </div>
           </div>
 
+          {paymentError && (
+            <p className="rounded-xl border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+              {paymentError}
+            </p>
+          )}
+
           <DialogFooter className="flex-row justify-end gap-3 pt-1">
-            <Button type="button" variant="secondary" onClick={() => onOpenChange(false)}>
+            <Button type="button" variant="secondary" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
               Cancelar
             </Button>
-            <Button type="submit" disabled={parsed <= 0}>
-              Confirmar Pago
+            <Button type="submit" disabled={parsed <= 0 || isSubmitting}>
+              {isSubmitting ? "Guardando…" : "Confirmar Pago"}
             </Button>
           </DialogFooter>
         </form>
