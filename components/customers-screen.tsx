@@ -93,11 +93,11 @@ useEffect(() => {
 
   function handleConfirmSale(
     customerId: string,
-    sale: { total: number; productName: string; quantity: number },
+    sale: { total: number; productName: string; quantity: number; balanceDelta: number },
   ) {
     setCustomers((prev) =>
       prev.map((c) =>
-        c.id === customerId ? { ...c, balance: c.balance + sale.total } : c,
+        c.id === customerId ? { ...c, balance: c.balance + sale.balanceDelta } : c,
       ),
     )
     setProfileRefresh((n) => n + 1)

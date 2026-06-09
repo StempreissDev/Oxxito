@@ -23,6 +23,8 @@ export function ProductsScreen() {
   const [deleteTarget, setDeleteTarget] = useState<Product | null>(null)
   const [deleteError, setDeleteError] = useState<string | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
+  const [modalError, setModalError] = useState<string | null>(null)
+  const [isModalSubmitting, setIsModalSubmitting] = useState(false)
 
   useEffect(() => {
     async function fetchProducts() {
@@ -70,6 +72,8 @@ export function ProductsScreen() {
     setFieldName("")
     setFieldPrice("")
     setFieldStock("")
+    setModalError(null)
+    setIsModalSubmitting(false)
   }
 
   async function handleAddProduct() {
@@ -100,8 +104,26 @@ export function ProductsScreen() {
     }
   }
 
-  function handleEditProduct() {
+  async function handleEditProduct() {
     if (!editing) return
+    setIsModalSubmitting(true)
+    setModalError(null)
+
+    const { error } = await supabase
+      .from("productos")
+      .update({
+        nombre: fieldName.trim(),
+        precio: parseFloat(fieldPrice) || 0,
+        stock: parseInt(fieldStock, 10) || 0,
+      })
+      .eq("id", editing.id)
+
+    if (error) {
+      setModalError("No se pudo actualizar el producto. Intenta de nuevo.")
+      setIsModalSubmitting(false)
+      return
+    }
+
     setProducts((prev) =>
       prev.map((p) =>
         p.id === editing.id
@@ -310,7 +332,7 @@ export function ProductsScreen() {
                 e.preventDefault()
                 if (!fieldName.trim()) return
                 if (editing) {
-                  handleEditProduct()
+                  await handleEditProduct()
                 } else {
                   await handleAddProduct()
                 }
@@ -367,20 +389,27 @@ export function ProductsScreen() {
                 </div>
               </div>
 
+              {modalError && (
+                <p className="rounded-xl border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                  {modalError}
+                </p>
+              )}
+
               <div className="mt-1 flex items-center gap-3">
                 <button
                   type="button"
                   onClick={closeModal}
-                  className="flex-1 rounded-xl border border-border bg-secondary py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-secondary/80"
+                  disabled={isModalSubmitting}
+                  className="flex-1 rounded-xl border border-border bg-secondary py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-secondary/80 disabled:opacity-50"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  disabled={!fieldName.trim()}
+                  disabled={!fieldName.trim() || isModalSubmitting}
                   className="flex-1 rounded-xl bg-primary py-2.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  {editing ? "Actualizar" : "Guardar"}
+                  {isModalSubmitting ? "Guardando…" : editing ? "Actualizar" : "Guardar"}
                 </button>
               </div>
             </form>

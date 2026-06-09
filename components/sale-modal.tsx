@@ -16,12 +16,14 @@ import { formatCurrency, type Product } from "@/lib/types"
 import { supabase } from "@/lib/supabase"
 import { cn } from "@/lib/utils"
 
+type PaymentType = "completo" | "despues" | "parcial" | null
+
 type SaleModalProps = {
   open: boolean
   onOpenChange: (open: boolean) => void
   onConfirm: (
     customerId: string,
-    sale: { total: number; productName: string; quantity: number },
+    sale: { total: number; productName: string; quantity: number; balanceDelta: number },
   ) => void
   customer?: Customer | null
 }
@@ -36,6 +38,8 @@ export function SaleModal({
   const [query, setQuery] = useState("")
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [quantity, setQuantity] = useState(1)
+  const [paymentType, setPaymentType] = useState<PaymentType>(null)
+  const [partialAmount, setPartialAmount] = useState("")
   const [saleError, setSaleError] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
@@ -44,6 +48,8 @@ export function SaleModal({
     setQuery("")
     setSelectedId(null)
     setQuantity(1)
+    setPaymentType(null)
+    setPartialAmount("")
     setSaleError(null)
     setIsSubmitting(false)
 
@@ -90,12 +96,23 @@ export function SaleModal({
 
   const maxQty = selected?.stock ?? 1
   const total = selected ? selected.price * quantity : 0
+  const parsedPartial = parseFloat(partialAmount) || 0
+  const isPartialValid = parsedPartial > 0 && parsedPartial < total
+
+  const canConfirm =
+    !!selected &&
+    !!paymentType &&
+    !isSubmitting &&
+    (paymentType !== "parcial" || isPartialValid)
 
   if (!customer) return null
 
   function selectProduct(product: Product) {
     setSelectedId(product.id)
     setQuantity(1)
+    setPaymentType(null)
+    setPartialAmount("")
+    setSaleError(null)
   }
 
   function decrease() {
@@ -107,7 +124,7 @@ export function SaleModal({
   }
 
   async function handleConfirm() {
-    if (!selected || !customer) return
+    if (!selected || !customer || !paymentType) return
 
     if (quantity > selected.stock) {
       setSaleError(`Stock insuficiente. Solo hay ${selected.stock} unidad${selected.stock === 1 ? "" : "es"} disponible${selected.stock === 1 ? "" : "s"}.`)
@@ -117,6 +134,7 @@ export function SaleModal({
     setIsSubmitting(true)
     setSaleError(null)
 
+    // 1. Insert venta
     const { error: ventaError } = await supabase
       .from("ventas")
       .insert([{
@@ -132,6 +150,7 @@ export function SaleModal({
       return
     }
 
+    // 2. Reduce stock
     const { error: stockError } = await supabase
       .from("productos")
       .update({ stock: selected.stock - quantity })
@@ -143,21 +162,63 @@ export function SaleModal({
       return
     }
 
-    const { error: saldoError } = await supabase
-      .from("clientes")
-      .update({ saldo_pendiente: customer.balance + total })
-      .eq("id", customer.id)
+    // 3. Handle payment type
+    if (paymentType === "completo") {
+      const { error: abonoError } = await supabase
+        .from("abonos")
+        .insert([{ cliente_id: customer.id, monto: total }])
 
-    if (saldoError) {
-      setSaleError("Venta y stock actualizados, pero no se pudo actualizar el saldo del cliente.")
-      setIsSubmitting(false)
-      return
+      if (abonoError) {
+        setSaleError("Venta registrada pero no se pudo registrar el pago en el historial.")
+        setIsSubmitting(false)
+        return
+      }
+
+    } else if (paymentType === "despues") {
+      const { error: saldoError } = await supabase
+        .from("clientes")
+        .update({ saldo_pendiente: customer.balance + total })
+        .eq("id", customer.id)
+
+      if (saldoError) {
+        setSaleError("Venta y stock actualizados, pero no se pudo actualizar el saldo del cliente.")
+        setIsSubmitting(false)
+        return
+      }
+
+    } else if (paymentType === "parcial") {
+      const { error: saldoError } = await supabase
+        .from("clientes")
+        .update({ saldo_pendiente: customer.balance + (total - parsedPartial) })
+        .eq("id", customer.id)
+
+      if (saldoError) {
+        setSaleError("Venta y stock actualizados, pero no se pudo actualizar el saldo del cliente.")
+        setIsSubmitting(false)
+        return
+      }
+
+      const { error: abonoError } = await supabase
+        .from("abonos")
+        .insert([{ cliente_id: customer.id, monto: parsedPartial }])
+
+      if (abonoError) {
+        setSaleError("Saldo actualizado pero no se pudo registrar el abono en el historial.")
+        setIsSubmitting(false)
+        return
+      }
     }
+
+    const balanceDelta =
+      paymentType === "completo" ? 0
+      : paymentType === "despues" ? total
+      : total - parsedPartial
 
     onConfirm(customer.id, {
       total,
       productName: selected.name,
       quantity,
+      balanceDelta,
     })
     onOpenChange(false)
   }
@@ -288,12 +349,66 @@ export function SaleModal({
               </span>
             </div>
             <div className="mt-3 flex items-end justify-between border-t border-border pt-3">
-              <span className="text-sm text-muted-foreground">Total a agregar</span>
+              <span className="text-sm text-muted-foreground">Total</span>
               <span className="text-3xl font-bold tracking-tight text-primary">
                 {formatCurrency(total)}
               </span>
             </div>
           </div>
+
+          {/* Payment options */}
+          {selected && (
+            <div className="mb-4">
+              <p className="mb-2 text-xs font-medium text-muted-foreground">
+                ¿Cómo va a pagar?
+              </p>
+              <div className="grid grid-cols-3 gap-2">
+                <PaymentChip
+                  active={paymentType === "completo"}
+                  onClick={() => { setPaymentType("completo"); setPartialAmount("") }}
+                >
+                  Pago completo
+                </PaymentChip>
+                <PaymentChip
+                  active={paymentType === "despues"}
+                  onClick={() => { setPaymentType("despues"); setPartialAmount("") }}
+                >
+                  Pagar después
+                </PaymentChip>
+                <PaymentChip
+                  active={paymentType === "parcial"}
+                  onClick={() => setPaymentType("parcial")}
+                >
+                  Abono parcial
+                </PaymentChip>
+              </div>
+
+              {paymentType === "parcial" && (
+                <div className="mt-3 flex flex-col gap-1.5">
+                  <label className="text-xs font-medium text-muted-foreground">
+                    Monto del abono (menor al total)
+                  </label>
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    step="0.01"
+                    min="0.01"
+                    value={partialAmount}
+                    onChange={(e) => setPartialAmount(e.target.value)}
+                    placeholder="0.00"
+                    className="h-10 w-full rounded-xl border border-input bg-background px-3 text-sm text-foreground placeholder:text-muted-foreground/60 outline-none transition-colors focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring"
+                  />
+                  {partialAmount !== "" && !isPartialValid && (
+                    <p className="text-xs text-destructive">
+                      {parsedPartial <= 0
+                        ? "El monto debe ser mayor a 0."
+                        : "El abono debe ser menor al total de la venta."}
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Error message */}
           {saleError && (
@@ -316,7 +431,7 @@ export function SaleModal({
             <Button
               type="button"
               onClick={handleConfirm}
-              disabled={!selected || isSubmitting}
+              disabled={!canConfirm}
               className="flex-1 gap-1.5 rounded-xl"
             >
               <Check className="size-4" />
@@ -326,5 +441,30 @@ export function SaleModal({
         </div>
       </DialogContent>
     </Dialog>
+  )
+}
+
+function PaymentChip({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean
+  onClick: () => void
+  children: React.ReactNode
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "rounded-xl border px-2 py-2.5 text-center text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        active
+          ? "border-primary bg-primary/10 text-primary"
+          : "border-border bg-secondary/40 text-muted-foreground hover:bg-secondary hover:text-foreground",
+      )}
+    >
+      {children}
+    </button>
   )
 }
