@@ -1,6 +1,6 @@
 "use client"
 
-import { Phone, HandCoins, ShoppingCart, CheckCircle2, AlertCircle, MoreVertical, Trash2 } from "lucide-react"
+import { Phone, HandCoins, ShoppingCart, CheckCircle2, AlertCircle, MoreVertical, Trash2, Pencil } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -18,9 +18,10 @@ type CustomerCardProps = {
   onNewSale: (customer: Customer) => void
   onOpenProfile: (customer: Customer) => void
   onDelete: (customer: Customer) => void
+  onEdit: (customer: Customer) => void
 }
 
-export function CustomerCard({ customer, onRegisterPayment, onNewSale, onOpenProfile, onDelete }: CustomerCardProps) {
+export function CustomerCard({ customer, onRegisterPayment, onNewSale, onOpenProfile, onDelete, onEdit }: CustomerCardProps) {
   const hasDebt = customer.balance > 0
 
   return (
@@ -78,6 +79,10 @@ export function CustomerCard({ customer, onRegisterPayment, onNewSale, onOpenPro
             <MoreVertical className="size-5" />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-48">
+            <DropdownMenuItem onClick={() => onEdit(customer)}>
+              <Pencil className="size-4" />
+              Editar cliente
+            </DropdownMenuItem>
             <DropdownMenuItem
               onClick={() => onDelete(customer)}
               className="text-destructive focus:text-destructive"

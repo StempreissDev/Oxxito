@@ -10,10 +10,12 @@ import {
   ResponsiveContainer,
   CartesianGrid,
 } from "recharts"
-import { TrendingUp, Banknote, Clock, ShoppingBag, CheckCircle2, AlertCircle, Package } from "lucide-react"
+import { TrendingUp, Banknote, Clock, ShoppingBag, CheckCircle2, AlertCircle, Package, FileDown } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { formatCurrency } from "@/lib/types"
 import { cn } from "@/lib/utils"
+import jsPDF from "jspdf"
+import autoTable from "jspdf-autotable"
 
 type Period = "today" | "week" | "month"
 
@@ -120,6 +122,7 @@ export function StatsScreen() {
   const [loading, setLoading] = useState(true)
   const [debtors, setDebtors] = useState<DebtorClient[]>([])
   const [loadingDebtors, setLoadingDebtors] = useState(true)
+  const [ventasRaw, setVentasRaw] = useState<any[]>([])
 
   const fetchStats = useCallback(async (p: Period) => {
     setLoading(true)
@@ -129,8 +132,9 @@ export function StatsScreen() {
     const [ventasResult, abonosResult, clientesResult] = await Promise.all([
       supabase
         .from("ventas")
-        .select("total, fecha_venta, producto_id, cantidad, productos(nombre)")
-        .gte("fecha_venta", startISO),
+        .select("total, fecha_venta, producto_id, cantidad, productos(nombre), clientes(nombre)")
+        .gte("fecha_venta", startISO)
+        .order("fecha_venta", { ascending: false }),
       supabase
         .from("abonos")
         .select("monto")
@@ -145,6 +149,7 @@ export function StatsScreen() {
     const abonosData = abonosResult.data ?? []
     const clientesData = clientesResult.data ?? []
 
+    setVentasRaw(ventasData)
     setStats({
       totalVendido: ventasData.reduce((sum, v) => sum + Number(v.total), 0),
       totalCobrado: abonosData.reduce((sum, a) => sum + Number(a.monto), 0),
@@ -209,28 +214,132 @@ export function StatsScreen() {
 
   const maxCantidad = stats.topProducts[0]?.cantidad ?? 1
 
+  function exportPDF() {
+    const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "letter" })
+    const periodLabel = PERIODS.find((p) => p.key === period)?.label ?? ""
+    const now = new Date()
+    const pad = (n: number) => String(n).padStart(2, "0")
+    const nowStr = `${pad(now.getDate())}/${pad(now.getMonth() + 1)}/${now.getFullYear()} ${pad(now.getHours())}:${pad(now.getMinutes())}`
+    const fileDate = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}`
+
+    const BLUE = [30, 64, 175] as [number, number, number]
+    const GRAY = [241, 245, 249] as [number, number, number]
+
+    // ── Encabezado ──
+    doc.setFontSize(20)
+    doc.setTextColor(...BLUE)
+    doc.setFont("helvetica", "bold")
+    doc.text("Reporte de Ventas - Oxxito", 14, 20)
+
+    doc.setFontSize(10)
+    doc.setFont("helvetica", "normal")
+    doc.setTextColor(80, 80, 80)
+    doc.text(`Período: ${periodLabel}`, 14, 28)
+    doc.text(`Generado: ${nowStr}`, 14, 34)
+
+    // ── Resumen General ──
+    doc.setFontSize(13)
+    doc.setFont("helvetica", "bold")
+    doc.setTextColor(...BLUE)
+    doc.text("Resumen General", 14, 44)
+
+    autoTable(doc, {
+      startY: 48,
+      head: [["Concepto", "Valor"]],
+      body: [
+        ["Total Vendido", formatCurrency(stats.totalVendido)],
+        ["Total Cobrado", formatCurrency(stats.totalCobrado)],
+        ["Por Cobrar", formatCurrency(stats.porCobrar)],
+        ["Ventas Realizadas", String(stats.ventasCount)],
+      ],
+      headStyles: { fillColor: BLUE, textColor: 255, fontStyle: "bold", fontSize: 10 },
+      alternateRowStyles: { fillColor: GRAY },
+      columnStyles: { 1: { halign: "right" } },
+      styles: { fontSize: 10 },
+    })
+
+    // ── Detalle de Ventas ──
+    let y: number = (doc as any).lastAutoTable.finalY + 10
+    doc.setFontSize(13)
+    doc.setFont("helvetica", "bold")
+    doc.setTextColor(...BLUE)
+    doc.text("Detalle de Ventas", 14, y)
+
+    autoTable(doc, {
+      startY: y + 4,
+      head: [["Fecha y Hora", "Cliente", "Producto", "Cant.", "Total"]],
+      body: ventasRaw.map((v) => {
+        const d = new Date(v.fecha_venta)
+        const fecha = `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`
+        return [
+          fecha,
+          (v.clientes as any)?.nombre ?? "-",
+          (v.productos as any)?.nombre ?? "-",
+          String(v.cantidad),
+          formatCurrency(Number(v.total)),
+        ]
+      }),
+      headStyles: { fillColor: BLUE, textColor: 255, fontStyle: "bold", fontSize: 9 },
+      alternateRowStyles: { fillColor: GRAY },
+      columnStyles: { 0: { cellWidth: 32 }, 3: { halign: "center" }, 4: { halign: "right" } },
+      styles: { fontSize: 9 },
+    })
+
+    // ── Clientes con Deuda ──
+    y = (doc as any).lastAutoTable.finalY + 10
+    doc.setFontSize(13)
+    doc.setFont("helvetica", "bold")
+    doc.setTextColor(...BLUE)
+    doc.text("Clientes con Deuda Pendiente", 14, y)
+
+    autoTable(doc, {
+      startY: y + 4,
+      head: [["Cliente", "Saldo Pendiente"]],
+      body: debtors.length > 0
+        ? debtors.map((d) => [d.nombre, formatCurrency(d.saldoPendiente)])
+        : [["Sin deudas pendientes", ""]],
+      headStyles: { fillColor: BLUE, textColor: 255, fontStyle: "bold", fontSize: 10 },
+      alternateRowStyles: { fillColor: GRAY },
+      columnStyles: { 1: { halign: "right" } },
+      styles: { fontSize: 10 },
+    })
+
+    doc.save(`reporte-oxxito-${fileDate}.pdf`)
+  }
+
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-md flex-col bg-background pb-24">
       {/* Header */}
       <header className="sticky top-0 z-10 border-b border-border bg-background/80 px-5 pb-4 pt-6 backdrop-blur-md">
         <h1 className="text-2xl font-bold tracking-tight text-foreground">Estadísticas</h1>
         <p className="mt-1 text-sm text-muted-foreground">Resumen de tu negocio</p>
-        <div className="mt-4 flex gap-2">
-          {PERIODS.map((p) => (
-            <button
-              key={p.key}
-              type="button"
-              onClick={() => setPeriod(p.key)}
-              className={cn(
-                "rounded-full px-4 py-1.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                period === p.key
-                  ? "bg-primary text-primary-foreground"
-                  : "bg-secondary text-muted-foreground hover:text-foreground",
-              )}
-            >
-              {p.label}
-            </button>
-          ))}
+        <div className="mt-4 flex items-center justify-between gap-2">
+          <div className="flex gap-2">
+            {PERIODS.map((p) => (
+              <button
+                key={p.key}
+                type="button"
+                onClick={() => setPeriod(p.key)}
+                className={cn(
+                  "rounded-full px-4 py-1.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                  period === p.key
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-secondary text-muted-foreground hover:text-foreground",
+                )}
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
+          <button
+            type="button"
+            onClick={exportPDF}
+            disabled={loading}
+            className="flex items-center gap-1.5 rounded-full bg-secondary px-3 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary/80 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <FileDown className="size-4" />
+            PDF
+          </button>
         </div>
       </header>
 

@@ -29,6 +29,11 @@ export function CustomersScreen() {
   const [deleteError, setDeleteError] = useState<string | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
   const [hasVentasForTarget, setHasVentasForTarget] = useState<boolean | null>(null)
+  const [editTarget, setEditTarget] = useState<Customer | null>(null)
+  const [editName, setEditName] = useState("")
+  const [editStep, setEditStep] = useState<"input" | "confirm">("input")
+  const [editError, setEditError] = useState<string | null>(null)
+  const [isSavingEdit, setIsSavingEdit] = useState(false)
   
 useEffect(() => {
     async function fetchCustomers() {
@@ -157,6 +162,36 @@ useEffect(() => {
     setIsDeleting(false)
   }
 
+  function handleEditCustomer(customer: Customer) {
+    setEditTarget(customer)
+    setEditName(customer.name)
+    setEditStep("input")
+    setEditError(null)
+  }
+
+  async function confirmEditCustomer() {
+    if (!editTarget) return
+    setIsSavingEdit(true)
+    setEditError(null)
+
+    const { error } = await supabase
+      .from("clientes")
+      .update({ nombre: editName.trim() })
+      .eq("id", editTarget.id)
+
+    if (error) {
+      setEditError("No se pudo guardar el cambio. Intenta de nuevo.")
+      setIsSavingEdit(false)
+      return
+    }
+
+    setCustomers((prev) =>
+      prev.map((c) => c.id === editTarget.id ? { ...c, name: editName.trim() } : c)
+    )
+    setEditTarget(null)
+    setIsSavingEdit(false)
+  }
+
  async function handleAddCustomer(data: { name: string; phone: string }) {
     console.log("Forjando nuevo cliente en la bóveda...");
 
@@ -281,6 +316,7 @@ useEffect(() => {
               onNewSale={handleNewSale}
               onOpenProfile={(c) => setProfileId(c.id)}
               onDelete={handleDeleteCustomer}
+              onEdit={handleEditCustomer}
             />
           ))
         ) : (
@@ -363,6 +399,99 @@ useEffect(() => {
                   : hasVentasForTarget ? "Sí, desactivar" : "Sí, eliminar"}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Editar cliente */}
+      {editTarget && (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center px-4 pb-6 sm:items-center sm:pb-0"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="edit-customer-title"
+        >
+          <div
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            aria-hidden="true"
+            onClick={() => { if (!isSavingEdit) { setEditTarget(null); setEditError(null) } }}
+          />
+          <div className="relative z-10 w-full max-w-md rounded-2xl border border-border bg-card px-6 py-6 shadow-xl">
+            {editStep === "input" ? (
+              <>
+                <h2 id="edit-customer-title" className="mb-1 text-xl font-bold tracking-tight text-foreground">
+                  Editar cliente
+                </h2>
+                <p className="mb-5 text-sm text-muted-foreground">
+                  Modifica el nombre de <span className="font-medium text-foreground">{editTarget.name}</span>.
+                </p>
+                <div className="mb-5 flex flex-col gap-1.5">
+                  <label htmlFor="edit-name" className="text-sm font-medium text-foreground">
+                    Nombre
+                  </label>
+                  <input
+                    id="edit-name"
+                    type="text"
+                    value={editName}
+                    onChange={(e) => setEditName(e.target.value)}
+                    className="h-10 w-full rounded-xl border border-input bg-background px-3 text-sm text-foreground placeholder:text-muted-foreground/60 outline-none transition-colors focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring"
+                    autoFocus
+                  />
+                </div>
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => { setEditTarget(null); setEditError(null) }}
+                    className="flex-1 rounded-xl border border-border bg-secondary py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-secondary/80"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!editName.trim() || editName.trim() === editTarget.name}
+                    onClick={() => { setEditStep("confirm"); setEditError(null) }}
+                    className="flex-1 rounded-xl bg-primary py-2.5 text-sm font-medium text-primary-foreground transition-colors hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    Continuar
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <h2 id="edit-customer-title" className="mb-1 text-xl font-bold tracking-tight text-foreground">
+                  ¿Confirmar cambio?
+                </h2>
+                <p className="mb-5 text-sm text-muted-foreground">
+                  El nombre cambiará de{" "}
+                  <span className="font-medium text-foreground">{editTarget.name}</span>{" "}
+                  a{" "}
+                  <span className="font-medium text-foreground">{editName.trim()}</span>.
+                </p>
+                {editError && (
+                  <p className="mb-4 rounded-xl border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                    {editError}
+                  </p>
+                )}
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setEditStep("input")}
+                    disabled={isSavingEdit}
+                    className="flex-1 rounded-xl border border-border bg-secondary py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-secondary/80 disabled:opacity-50"
+                  >
+                    Atrás
+                  </button>
+                  <button
+                    type="button"
+                    onClick={confirmEditCustomer}
+                    disabled={isSavingEdit}
+                    className="flex-1 rounded-xl bg-primary py-2.5 text-sm font-medium text-primary-foreground transition-colors hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {isSavingEdit ? "Guardando…" : "Sí, cambiar"}
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}
