@@ -2,6 +2,7 @@ import { Analytics } from '@vercel/analytics/next'
 import type { Metadata } from 'next'
 import { Geist, Geist_Mono } from 'next/font/google'
 import './globals.css'
+import { AuthGuard } from '@/components/auth-guard'
 
 const geistSans = Geist({ variable: '--font-geist-sans', subsets: ['latin'] })
 const geistMono = Geist_Mono({
@@ -41,7 +42,7 @@ export default function RootLayout({
     <html lang="es" className={`dark ${geistSans.variable} ${geistMono.variable}`}>
       <body className="font-sans antialiased bg-background text-foreground">
         <meta name="theme-color" content="#0a0a0c" />
-        {children}
+        <AuthGuard>{children}</AuthGuard>
         {process.env.NODE_ENV === 'production' && <Analytics />}
       </body>
     </html>

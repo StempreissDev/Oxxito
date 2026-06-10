@@ -2,16 +2,22 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Package, Users } from "lucide-react"
+import { Package, Users, BarChart2, LogOut } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { supabase } from "@/lib/supabase"
 
 const tabs = [
   { href: "/", label: "Inventario", icon: Package },
   { href: "/clientes", label: "Clientes", icon: Users },
+  { href: "/estadisticas", label: "Estadísticas", icon: BarChart2 },
 ]
 
 export function BottomNav() {
   const pathname = usePathname()
+
+  async function handleSignOut() {
+    await supabase.auth.signOut()
+  }
 
   return (
     <nav className="sticky bottom-0 z-20 mx-auto w-full max-w-md border-t border-border bg-background/90 backdrop-blur-md">
@@ -34,6 +40,15 @@ export function BottomNav() {
             </Link>
           )
         })}
+        <div className="flex items-center border-l border-border px-3">
+          <button
+            onClick={handleSignOut}
+            title="Cerrar sesión"
+            className="flex items-center justify-center rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+          >
+            <LogOut className="size-5" />
+          </button>
+        </div>
       </div>
     </nav>
   )
