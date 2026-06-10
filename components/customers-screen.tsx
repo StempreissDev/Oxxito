@@ -101,7 +101,6 @@ useEffect(() => {
       ),
     )
     setProfileRefresh((n) => n + 1)
-    setSelected(null)
   }
 
   async function handleDeleteCustomer(customer: Customer) {
@@ -212,7 +211,7 @@ useEffect(() => {
         />
         <SaleModal
           open={saleOpen}
-          onOpenChange={setSaleOpen}
+          onOpenChange={(open) => { setSaleOpen(open); if (!open) setSelected(null) }}
           onConfirm={handleConfirmSale}
           customer={selected}
         />
@@ -302,7 +301,7 @@ useEffect(() => {
       />
       <SaleModal
         open={saleOpen}
-        onOpenChange={setSaleOpen}
+        onOpenChange={(open) => { setSaleOpen(open); if (!open) setSelected(null) }}
         onConfirm={handleConfirmSale}
         customer={selected}
       />
