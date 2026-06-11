@@ -1,14 +1,19 @@
 import { Analytics } from '@vercel/analytics/next'
-import type { Metadata } from 'next'
+import type { Metadata, Viewport } from 'next'
 import { Geist, Geist_Mono } from 'next/font/google'
 import './globals.css'
 import { AuthGuard } from '@/components/auth-guard'
+
 
 const geistSans = Geist({ variable: '--font-geist-sans', subsets: ['latin'] })
 const geistMono = Geist_Mono({
   variable: '--font-geist-mono',
   subsets: ['latin'],
 })
+
+export const viewport: Viewport = {
+  themeColor: "#09090b",
+};
 
 export const metadata: Metadata = {
   title: 'Inventario de Productos',
@@ -30,6 +35,12 @@ export const metadata: Metadata = {
       },
     ],
     apple: '/apple-icon.png',
+  },
+   manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "Oxxito",
   },
 }
 
