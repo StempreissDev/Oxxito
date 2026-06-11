@@ -41,6 +41,7 @@ export const metadata: Metadata = {
     capable: true,
     statusBarStyle: "black-translucent",
     title: "Oxxito",
+    startupImage: "/icons/icon-512x512.png",
   },
 }
 
@@ -51,6 +52,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="es" className={`dark ${geistSans.variable} ${geistMono.variable}`}>
+      <head>
+      <link rel="apple-touch-icon" href="/icons/icon-192x192.png" />
+      </head>
       <body className="font-sans antialiased bg-background text-foreground">
         <meta name="theme-color" content="#0a0a0c" />
         <AuthGuard>{children}</AuthGuard>
