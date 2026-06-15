@@ -116,6 +116,7 @@ export function SaleModal({
             name: p.nombre,
             price: Number(p.precio),
             stock: p.stock,
+            stockMin: p.stock_minimo ?? 5,
           }))
         )
       }

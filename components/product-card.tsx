@@ -18,7 +18,7 @@ type ProductCardProps = {
 
 export function ProductCard({ product, onEdit, onDelete }: ProductCardProps) {
   const isOut = product.stock === 0
-  const isLow = product.stock > 0 && product.stock <= 5
+  const isLow = product.stock > 0 && product.stockMin > 0 && product.stock <= product.stockMin
 
   return (
     <div className="flex items-center gap-4 rounded-2xl border border-border bg-card p-4">

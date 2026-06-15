@@ -46,6 +46,19 @@ Always translate between camelCase English (app) and Spanish snake_case (DB) whe
 ### Component structure
 Screens (`*-screen.tsx`) own all local state and inline their own modals — modals are not always separate files. The `SaleModal` is the most complex component: it handles product selection, quantity, three payment types (completo / despues / parcial), sequential Supabase writes, and a WhatsApp share link on success.
 
+`inventory-screen.tsx` is a **legacy prototype** that uses local mock data (`initialProducts`) with no Supabase connection — it is not used by any route. The live products screen is `products-screen.tsx`.
+
+`CustomerProfile` (`components/customer-profile.tsx`) shows per-customer transaction history. It queries both `ventas` and `abonos` and merges them into `Movement` objects (type defined in `lib/customers.ts`): `type: "compra" | "abono"`, with optional `productName` and `quantity` for purchases.
+
+`StatsScreen` (`components/stats-screen.tsx`) uses **Recharts** for bar charts and **jsPDF + jspdf-autotable** for PDF export. Periods: today / week / month.
+
+### UI stack
+- Tailwind v4 — configured via `postcss.config.mjs`, no `tailwind.config.js`
+- shadcn/ui components live in `components/ui/` (Button, Input, Dialog, etc.)
+- `@base-ui/react` is the underlying primitive library
+- `cn()` helper in `lib/utils.ts` (clsx + tailwind-merge)
+- Currency always formatted as MXN via `formatCurrency` from `lib/types.ts`
+
 ### Environment variables
 ```
 NEXT_PUBLIC_SUPABASE_URL=...
@@ -55,3 +68,6 @@ Both must be set in `.env.local` for the app to connect to Supabase.
 
 ### PWA
 Service worker is disabled in development and active in production (via `@ducanh2912/next-pwa`). The manifest is at `public/manifest.json`.
+
+### Mobile testing on LAN
+`next.config.mjs` allows `192.168.1.131` via `allowedDevOrigins`. Run `pnpm dev` and open the local IP on a phone to test the PWA experience without deploying.

@@ -20,6 +20,7 @@ export function ProductsScreen() {
   const [fieldName, setFieldName] = useState("")
   const [fieldPrice, setFieldPrice] = useState("")
   const [fieldStock, setFieldStock] = useState("")
+  const [fieldStockMin, setFieldStockMin] = useState("5")
   const [deleteTarget, setDeleteTarget] = useState<Product | null>(null)
   const [deleteError, setDeleteError] = useState<string | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
@@ -42,6 +43,7 @@ export function ProductsScreen() {
             name: p.nombre,
             price: Number(p.precio),
             stock: p.stock,
+            stockMin: p.stock_minimo ?? 5,
           }))
         )
       }
@@ -55,6 +57,7 @@ export function ProductsScreen() {
     setFieldName("")
     setFieldPrice("")
     setFieldStock("")
+    setFieldStockMin("5")
     setModalOpen(true)
   }
 
@@ -63,6 +66,7 @@ export function ProductsScreen() {
     setFieldName(product.name)
     setFieldPrice(String(product.price))
     setFieldStock(String(product.stock))
+    setFieldStockMin(String(product.stockMin ?? 5))
     setModalOpen(true)
   }
 
@@ -72,6 +76,7 @@ export function ProductsScreen() {
     setFieldName("")
     setFieldPrice("")
     setFieldStock("")
+    setFieldStockMin("5")
     setModalError(null)
     setIsModalSubmitting(false)
   }
@@ -83,6 +88,7 @@ export function ProductsScreen() {
         nombre: fieldName.trim(),
         precio: parseFloat(fieldPrice) || 0,
         stock: parseInt(fieldStock, 10) || 0,
+        stock_minimo: parseInt(fieldStockMin, 10) || 0,
       }])
       .select()
       .single()
@@ -98,6 +104,7 @@ export function ProductsScreen() {
         name: newDbProduct.nombre,
         price: Number(newDbProduct.precio),
         stock: newDbProduct.stock,
+        stockMin: newDbProduct.stock_minimo ?? 5,
       }
       setProducts((prev) => [productoReal, ...prev])
       closeModal()
@@ -115,6 +122,7 @@ export function ProductsScreen() {
         nombre: fieldName.trim(),
         precio: parseFloat(fieldPrice) || 0,
         stock: parseInt(fieldStock, 10) || 0,
+        stock_minimo: parseInt(fieldStockMin, 10) || 0,
       })
       .eq("id", editing.id)
 
@@ -132,6 +140,7 @@ export function ProductsScreen() {
               name: fieldName.trim(),
               price: parseFloat(fieldPrice) || 0,
               stock: parseInt(fieldStock, 10) || 0,
+              stockMin: parseInt(fieldStockMin, 10) || 0,
             }
           : p
       )
@@ -183,10 +192,15 @@ export function ProductsScreen() {
     setIsDeleting(false)
   }
 
+  const lowStockProducts = useMemo(
+    () => products.filter((p) => p.stockMin > 0 && p.stock <= p.stockMin),
+    [products]
+  )
+
   const filtered = useMemo(() => {
     return products.filter((p) => {
       const matchesQuery = p.name.toLowerCase().includes(query.toLowerCase().trim())
-      const matchesFilter = filter === "all" ? true : p.stock <= 5
+      const matchesFilter = filter === "all" ? true : p.stockMin > 0 && p.stock <= p.stockMin
       return matchesQuery && matchesFilter
     })
   }, [products, query, filter])
@@ -231,6 +245,15 @@ export function ProductsScreen() {
             Bajo stock
           </FilterChip>
         </div>
+
+        {lowStockProducts.length > 0 && (
+          <div className="mt-3 flex items-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2.5">
+            <span className="text-amber-400" aria-hidden="true">⚠️</span>
+            <p className="text-sm text-amber-400">
+              {lowStockProducts.length} {lowStockProducts.length === 1 ? "producto" : "productos"} con stock bajo o sin stock
+            </p>
+          </div>
+        )}
       </header>
 
       {/* Product list */}
@@ -354,27 +377,27 @@ export function ProductsScreen() {
                 />
               </div>
 
+              <div className="flex flex-col gap-1.5">
+                <label htmlFor="p-price" className="text-sm font-medium text-foreground">
+                  Precio de venta
+                </label>
+                <input
+                  id="p-price"
+                  type="number"
+                  inputMode="decimal"
+                  step="0.01"
+                  min="0"
+                  value={fieldPrice}
+                  onChange={(e) => setFieldPrice(e.target.value)}
+                  placeholder="0.00"
+                  className="h-10 w-full rounded-xl border border-input bg-background px-3 text-sm text-foreground placeholder:text-muted-foreground/60 outline-none transition-colors focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring"
+                />
+              </div>
+
               <div className="grid grid-cols-2 gap-3">
                 <div className="flex flex-col gap-1.5">
-                  <label htmlFor="p-price" className="text-sm font-medium text-foreground">
-                    Precio de venta
-                  </label>
-                  <input
-                    id="p-price"
-                    type="number"
-                    inputMode="decimal"
-                    step="0.01"
-                    min="0"
-                    value={fieldPrice}
-                    onChange={(e) => setFieldPrice(e.target.value)}
-                    placeholder="0.00"
-                    className="h-10 w-full rounded-xl border border-input bg-background px-3 text-sm text-foreground placeholder:text-muted-foreground/60 outline-none transition-colors focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring"
-                  />
-                </div>
-
-                <div className="flex flex-col gap-1.5">
                   <label htmlFor="p-stock" className="text-sm font-medium text-foreground">
-                    Stock
+                    Stock actual
                   </label>
                   <input
                     id="p-stock"
@@ -387,7 +410,26 @@ export function ProductsScreen() {
                     className="h-10 w-full rounded-xl border border-input bg-background px-3 text-sm text-foreground placeholder:text-muted-foreground/60 outline-none transition-colors focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring"
                   />
                 </div>
+
+                <div className="flex flex-col gap-1.5">
+                  <label htmlFor="p-stock-min" className="text-sm font-medium text-foreground">
+                    Stock mínimo
+                  </label>
+                  <input
+                    id="p-stock-min"
+                    type="number"
+                    inputMode="numeric"
+                    min="0"
+                    value={fieldStockMin}
+                    onChange={(e) => setFieldStockMin(e.target.value)}
+                    placeholder="5"
+                    className="h-10 w-full rounded-xl border border-input bg-background px-3 text-sm text-foreground placeholder:text-muted-foreground/60 outline-none transition-colors focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring"
+                  />
+                </div>
               </div>
+              <p className="text-xs text-muted-foreground">
+                Stock mínimo: alerta cuando llegue a este número. Usa 0 para desactivar.
+              </p>
 
               {modalError && (
                 <p className="rounded-xl border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">

@@ -2,6 +2,7 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
+import { useEffect, useState } from "react"
 import { Package, Users, BarChart2, LogOut } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { supabase } from "@/lib/supabase"
@@ -14,6 +15,24 @@ const tabs = [
 
 export function BottomNav() {
   const pathname = usePathname()
+  const [lowStockCount, setLowStockCount] = useState(0)
+
+  useEffect(() => {
+    async function fetchLowStock() {
+      const { data } = await supabase
+        .from("productos")
+        .select("stock, stock_minimo")
+
+      if (data) {
+        const count = data.filter(
+          (p: any) => (p.stock_minimo ?? 5) > 0 && p.stock <= (p.stock_minimo ?? 5)
+        ).length
+        setLowStockCount(count)
+      }
+    }
+
+    fetchLowStock()
+  }, [pathname])
 
   async function handleSignOut() {
     await supabase.auth.signOut()
@@ -25,6 +44,7 @@ export function BottomNav() {
         {tabs.map((tab) => {
           const active = pathname === tab.href
           const Icon = tab.icon
+          const showBadge = tab.href === "/" && lowStockCount > 0
           return (
             <Link
               key={tab.href}
@@ -35,7 +55,14 @@ export function BottomNav() {
               )}
               aria-current={active ? "page" : undefined}
             >
-              <Icon className="size-5" />
+              <span className="relative">
+                <Icon className="size-5" />
+                {showBadge && (
+                  <span className="absolute -right-2 -top-1.5 flex min-w-[16px] items-center justify-center rounded-full bg-amber-500 px-1 text-[10px] font-bold leading-4 text-white">
+                    {lowStockCount > 99 ? "99+" : lowStockCount}
+                  </span>
+                )}
+              </span>
               {tab.label}
             </Link>
           )
