@@ -169,6 +169,12 @@ useEffect(() => {
     setEditError(null)
   }
 
+  function handleUpdateFromProfile(id: string, name: string, phone: string) {
+    setCustomers((prev) =>
+      prev.map((c) => (c.id === id ? { ...c, name, phone } : c))
+    )
+  }
+
   async function confirmEditCustomer() {
     if (!editTarget) return
     setIsSavingEdit(true)
@@ -237,6 +243,7 @@ useEffect(() => {
           onBack={() => setProfileId(null)}
           onRegisterPayment={openPayment}
           onNewSale={handleNewSale}
+          onUpdate={handleUpdateFromProfile}
         />
         <PaymentModal
           open={paymentOpen}

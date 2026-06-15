@@ -9,6 +9,7 @@ import {
   CheckCircle2,
   AlertCircle,
   PackageOpen,
+  Pencil,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { type Customer } from "@/lib/customers"
@@ -31,6 +32,7 @@ type CustomerProfileProps = {
   onBack: () => void
   onRegisterPayment: (customer: Customer) => void
   onNewSale: (customer: Customer) => void
+  onUpdate?: (id: string, name: string, phone: string) => void
 }
 
 type Filter = "todo" | "compras" | "abonos"
@@ -57,10 +59,53 @@ export function CustomerProfile({
   onBack,
   onRegisterPayment,
   onNewSale,
+  onUpdate,
 }: CustomerProfileProps) {
   const [movements, setMovements] = useState<Movement[]>([])
   const [filter, setFilter] = useState<Filter>("todo")
+  const [localName, setLocalName] = useState(customer.name)
+  const [localPhone, setLocalPhone] = useState(customer.phone)
+  const [editOpen, setEditOpen] = useState(false)
+  const [editName, setEditName] = useState("")
+  const [editPhone, setEditPhone] = useState("")
+  const [editError, setEditError] = useState<string | null>(null)
+  const [isSaving, setIsSaving] = useState(false)
   const hasDebt = customer.balance > 0
+
+  function openEdit() {
+    setEditName(localName)
+    setEditPhone(localPhone)
+    setEditError(null)
+    setEditOpen(true)
+  }
+
+  function closeEdit() {
+    setEditOpen(false)
+    setEditError(null)
+  }
+
+  async function handleSaveEdit() {
+    if (!editName.trim()) return
+    setIsSaving(true)
+    setEditError(null)
+
+    const { error } = await supabase
+      .from("clientes")
+      .update({ nombre: editName.trim(), telefono: editPhone.trim() })
+      .eq("id", customer.id)
+
+    if (error) {
+      setEditError("No se pudo guardar el cambio. Intenta de nuevo.")
+      setIsSaving(false)
+      return
+    }
+
+    setLocalName(editName.trim())
+    setLocalPhone(editPhone.trim())
+    onUpdate?.(customer.id, editName.trim(), editPhone.trim())
+    setEditOpen(false)
+    setIsSaving(false)
+  }
 
   useEffect(() => {
     async function fetchMovements() {
@@ -124,17 +169,25 @@ export function CustomerProfile({
             className="flex size-12 shrink-0 items-center justify-center rounded-2xl bg-secondary text-base font-semibold text-foreground"
             aria-hidden="true"
           >
-            {customer.name.charAt(0)}
+            {localName.charAt(0)}
           </div>
           <div className="min-w-0 flex-1">
             <h1 className="truncate text-xl font-bold leading-tight tracking-tight text-foreground">
-              {customer.name}
+              {localName}
             </h1>
             <div className="mt-1 flex items-center gap-1.5 text-sm text-muted-foreground">
               <Phone className="size-3.5 shrink-0" aria-hidden="true" />
-              <span className="truncate">{customer.phone}</span>
+              <span className="truncate">{localPhone}</span>
             </div>
           </div>
+          <button
+            type="button"
+            onClick={openEdit}
+            aria-label="Editar cliente"
+            className="flex size-9 shrink-0 items-center justify-center rounded-xl border border-border bg-secondary text-muted-foreground transition-colors hover:bg-secondary/80 hover:text-foreground"
+          >
+            <Pencil className="size-4" />
+          </button>
         </div>
       </header>
 
@@ -250,6 +303,91 @@ export function CustomerProfile({
           )}
         </section>
       </div>
+
+      {/* Modal: Editar cliente */}
+      {editOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center px-4 pb-6 sm:items-center sm:pb-0"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="edit-profile-title"
+        >
+          <div
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            aria-hidden="true"
+            onClick={() => { if (!isSaving) closeEdit() }}
+          />
+          <div className="relative z-10 w-full max-w-md rounded-2xl border border-border bg-card px-6 py-6 shadow-xl">
+            <h2
+              id="edit-profile-title"
+              className="mb-1 text-xl font-bold tracking-tight text-foreground"
+            >
+              Editar cliente
+            </h2>
+            <p className="mb-5 text-sm text-muted-foreground">
+              Modifica los datos de{" "}
+              <span className="font-medium text-foreground">{localName}</span>.
+            </p>
+
+            <form
+              onSubmit={(e) => { e.preventDefault(); handleSaveEdit() }}
+              className="flex flex-col gap-4"
+            >
+              <div className="flex flex-col gap-1.5">
+                <label htmlFor="ep-name" className="text-sm font-medium text-foreground">
+                  Nombre completo
+                </label>
+                <input
+                  id="ep-name"
+                  type="text"
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  autoFocus
+                  className="h-10 w-full rounded-xl border border-input bg-background px-3 text-sm text-foreground placeholder:text-muted-foreground/60 outline-none transition-colors focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring"
+                />
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label htmlFor="ep-phone" className="text-sm font-medium text-foreground">
+                  Teléfono
+                </label>
+                <input
+                  id="ep-phone"
+                  type="tel"
+                  inputMode="tel"
+                  value={editPhone}
+                  onChange={(e) => setEditPhone(e.target.value)}
+                  className="h-10 w-full rounded-xl border border-input bg-background px-3 text-sm text-foreground placeholder:text-muted-foreground/60 outline-none transition-colors focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring"
+                />
+              </div>
+
+              {editError && (
+                <p className="rounded-xl border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                  {editError}
+                </p>
+              )}
+
+              <div className="mt-1 flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={closeEdit}
+                  disabled={isSaving}
+                  className="flex-1 rounded-xl border border-border bg-secondary py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-secondary/80 disabled:opacity-50"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={!editName.trim() || isSaving}
+                  className="flex-1 rounded-xl bg-primary py-2.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {isSaving ? "Guardando…" : "Guardar cambios"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </main>
   )
 }
