@@ -65,8 +65,10 @@ useEffect(() => {
 
 
   const filtered = useMemo(() => {
+    const q = query.toLowerCase().trim()
     return customers.filter((c) =>
-      c.name.toLowerCase().includes(query.toLowerCase().trim()),
+      c.name.toLowerCase().includes(q) ||
+      (c.phone ?? "").toLowerCase().includes(q)
     )
   }, [customers, query])
 
@@ -88,7 +90,6 @@ useEffect(() => {
     )
     setProfileRefresh((n) => n + 1)
     setCollected((prev) => prev + amount)
-    setSelected(null)
   }
 
   function handleNewSale(customer: Customer) {
@@ -247,7 +248,7 @@ useEffect(() => {
         />
         <PaymentModal
           open={paymentOpen}
-          onOpenChange={setPaymentOpen}
+          onOpenChange={(open) => { setPaymentOpen(open); if (!open) setSelected(null) }}
           onConfirm={handleConfirmPayment}
           customer={selected}
         />
@@ -288,7 +289,7 @@ useEffect(() => {
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Buscar cliente..."
             className="rounded-xl pl-9"
-            aria-label="Buscar cliente por nombre"
+            aria-label="Buscar cliente por nombre o teléfono"
           />
         </div>
       </header>
@@ -331,14 +332,18 @@ useEffect(() => {
             <div className="flex size-14 items-center justify-center rounded-2xl bg-secondary">
               <UserX className="size-7 text-muted-foreground" />
             </div>
-            <p className="text-sm text-muted-foreground">No se encontraron clientes</p>
+            <p className="text-sm text-muted-foreground">
+              {query.trim()
+                ? "No se encontraron clientes con ese nombre o teléfono"
+                : "No hay clientes registrados"}
+            </p>
           </div>
         )}
       </section>
 
       <PaymentModal
         open={paymentOpen}
-        onOpenChange={setPaymentOpen}
+        onOpenChange={(open) => { setPaymentOpen(open); if (!open) setSelected(null) }}
         onConfirm={handleConfirmPayment}
         customer={selected}
       />

@@ -192,15 +192,18 @@ export function ProductsScreen() {
     setIsDeleting(false)
   }
 
+  const isAlerted = (p: { stock: number; stockMin: number }) =>
+    p.stock === 0 || (p.stockMin > 0 && p.stock <= p.stockMin)
+
   const lowStockProducts = useMemo(
-    () => products.filter((p) => p.stockMin > 0 && p.stock <= p.stockMin),
+    () => products.filter(isAlerted),
     [products]
   )
 
   const filtered = useMemo(() => {
     return products.filter((p) => {
       const matchesQuery = p.name.toLowerCase().includes(query.toLowerCase().trim())
-      const matchesFilter = filter === "all" ? true : p.stockMin > 0 && p.stock <= p.stockMin
+      const matchesFilter = filter === "all" ? true : isAlerted(p)
       return matchesQuery && matchesFilter
     })
   }, [products, query, filter])

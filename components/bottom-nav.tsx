@@ -25,7 +25,7 @@ export function BottomNav() {
 
       if (data) {
         const count = data.filter(
-          (p: any) => (p.stock_minimo ?? 5) > 0 && p.stock <= (p.stock_minimo ?? 5)
+          (p: any) => p.stock === 0 || ((p.stock_minimo ?? 5) > 0 && p.stock <= (p.stock_minimo ?? 5))
         ).length
         setLowStockCount(count)
       }
@@ -58,7 +58,7 @@ export function BottomNav() {
               <span className="relative">
                 <Icon className="size-5" />
                 {showBadge && (
-                  <span className="absolute -right-2 -top-1.5 flex min-w-[16px] items-center justify-center rounded-full bg-amber-500 px-1 text-[10px] font-bold leading-4 text-white">
+                  <span className="absolute -right-2 -top-1.5 flex min-w-[16px] items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-bold leading-4 text-white">
                     {lowStockCount > 99 ? "99+" : lowStockCount}
                   </span>
                 )}

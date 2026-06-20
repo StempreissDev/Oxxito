@@ -45,7 +45,7 @@ export function ProductCard({ product, onEdit, onDelete }: ProductCardProps) {
             )}
           >
             {(isOut || isLow) && <AlertTriangle className="size-3" aria-hidden="true" />}
-            {isOut ? "Sin stock" : `${product.stock} en stock`}
+            {isOut ? "Sin stock" : isLow ? `Stock bajo · ${product.stock}` : `${product.stock} en stock`}
           </span>
         </div>
       </div>
