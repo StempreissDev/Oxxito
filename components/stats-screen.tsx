@@ -80,13 +80,15 @@ function buildChartData(ventasData: any[], start: Date): ChartDatum[] {
 function buildTopProducts(ventasData: any[]): TopProduct[] {
   const map: Record<string, TopProduct> = {}
   ventasData.forEach((v) => {
-    const id = v.producto_id
-    if (!id) return
-    if (!map[id]) {
-      map[id] = { nombre: v.productos?.nombre ?? "Producto", cantidad: 0, total: 0 }
-    }
-    map[id].cantidad += Number(v.cantidad ?? 1)
-    map[id].total += Number(v.total ?? 0)
+    ;(v.detalle_ventas ?? []).forEach((d: any) => {
+      const id = d.producto_id
+      if (!id) return
+      if (!map[id]) {
+        map[id] = { nombre: d.productos?.nombre ?? "Producto", cantidad: 0, total: 0 }
+      }
+      map[id].cantidad += Number(d.cantidad ?? 1)
+      map[id].total += Number(d.subtotal ?? 0)
+    })
   })
   return Object.values(map)
     .sort((a, b) => b.cantidad - a.cantidad)
@@ -132,7 +134,7 @@ export function StatsScreen() {
     const [ventasResult, abonosResult, clientesResult] = await Promise.all([
       supabase
         .from("ventas")
-        .select("total, fecha_venta, producto_id, cantidad, productos(nombre), clientes(nombre)")
+        .select("id, total, fecha_venta, clientes(nombre), detalle_ventas(cantidad, subtotal, producto_id, productos(nombre))")
         .gte("fecha_venta", startISO)
         .order("fecha_venta", { ascending: false }),
       supabase
@@ -267,21 +269,23 @@ export function StatsScreen() {
 
     autoTable(doc, {
       startY: y + 4,
-      head: [["Fecha y Hora", "Cliente", "Producto", "Cant.", "Total"]],
+      head: [["Fecha y Hora", "Cliente", "Productos", "Total"]],
       body: ventasRaw.map((v) => {
         const d = new Date(v.fecha_venta)
         const fecha = `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`
+        const productos = (v.detalle_ventas ?? [])
+          .map((dv: any) => `${dv.productos?.nombre ?? "?"} x${dv.cantidad}`)
+          .join(", ") || "-"
         return [
           fecha,
           (v.clientes as any)?.nombre ?? "-",
-          (v.productos as any)?.nombre ?? "-",
-          String(v.cantidad),
+          productos,
           formatCurrency(Number(v.total)),
         ]
       }),
       headStyles: { fillColor: BLUE, textColor: 255, fontStyle: "bold", fontSize: 9 },
       alternateRowStyles: { fillColor: GRAY },
-      columnStyles: { 0: { cellWidth: 32 }, 3: { halign: "center" }, 4: { halign: "right" } },
+      columnStyles: { 0: { cellWidth: 32 }, 3: { halign: "right" } },
       styles: { fontSize: 9 },
     })
 

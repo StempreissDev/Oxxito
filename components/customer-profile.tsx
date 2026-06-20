@@ -22,8 +22,7 @@ type Movement = {
   type: "compra" | "abono"
   date: string
   amount: number
-  productName?: string
-  quantity?: number
+  items?: { name: string; qty: number }[]
 }
 
 type CustomerProfileProps = {
@@ -112,7 +111,7 @@ export function CustomerProfile({
       const [ventasResult, abonosResult] = await Promise.all([
         supabase
           .from("ventas")
-          .select("id, total, cantidad, fecha_venta, productos(nombre)")
+          .select("id, total, fecha_venta, detalle_ventas(cantidad, productos(nombre))")
           .eq("cliente_id", customer.id),
         supabase
           .from("abonos")
@@ -125,8 +124,10 @@ export function CustomerProfile({
         type: "compra" as const,
         date: v.fecha_venta,
         amount: Number(v.total),
-        productName: v.productos?.nombre,
-        quantity: v.cantidad,
+        items: (v.detalle_ventas ?? []).map((d: any) => ({
+          name: d.productos?.nombre ?? "Producto",
+          qty: d.cantidad,
+        })),
       }))
 
       const abonos: Movement[] = (abonosResult.data ?? []).map((a: any) => ({
@@ -427,12 +428,20 @@ function TimelineItem({ movement, last }: { movement: Movement; last: boolean })
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <p className="text-sm font-medium text-foreground">
-              {isPayment ? "Abono recibido" : (movement.productName ?? "Producto")}
+              {isPayment ? "Abono recibido" : "Compra"}
             </p>
             <p className="mt-0.5 text-xs text-muted-foreground">
               {formatDateTime(movement.date)}
-              {!isPayment && movement.quantity ? ` · ${movement.quantity} u` : ""}
             </p>
+            {!isPayment && movement.items && movement.items.length > 0 && (
+              <ul className="mt-1.5 space-y-0.5">
+                {movement.items.map((item, i) => (
+                  <li key={i} className="text-xs text-muted-foreground">
+                    · {item.name} ×{item.qty}
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
           <span
             className={cn(

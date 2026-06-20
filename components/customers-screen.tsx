@@ -99,7 +99,7 @@ useEffect(() => {
 
   function handleConfirmSale(
     customerId: string,
-    sale: { total: number; productName: string; quantity: number; balanceDelta: number },
+    sale: { total: number; balanceDelta: number },
   ) {
     setCustomers((prev) =>
       prev.map((c) =>
