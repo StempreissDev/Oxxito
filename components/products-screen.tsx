@@ -24,12 +24,13 @@ export function ProductsScreen() {
   const [deleteTarget, setDeleteTarget] = useState<Product | null>(null)
   const [deleteError, setDeleteError] = useState<string | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
+  const [hasVentasForTarget, setHasVentasForTarget] = useState<boolean | null>(null)
   const [modalError, setModalError] = useState<string | null>(null)
   const [isModalSubmitting, setIsModalSubmitting] = useState(false)
 
   useEffect(() => {
     async function fetchProducts() {
-      const { data, error } = await supabase.from("productos").select("*")
+      const { data, error } = await supabase.from("productos").select("*").or("activo.eq.true,activo.is.null")
 
       if (error) {
         console.error("Error al cargar productos:", error.message)
@@ -148,10 +149,25 @@ export function ProductsScreen() {
     closeModal()
   }
 
-  function handleDelete(id: string) {
+  async function handleDelete(id: string) {
     const product = products.find((p) => p.id === id) ?? null
-    setDeleteTarget(product)
     setDeleteError(null)
+    setHasVentasForTarget(null)
+
+    const { count, error: countError } = await supabase
+      .from("detalle_ventas")
+      .select("id", { count: "exact", head: true })
+      .eq("producto_id", id)
+      .limit(1)
+
+    if (countError) {
+      setDeleteError("No se pudo verificar el producto. Intenta de nuevo.")
+      setDeleteTarget(product)
+      return
+    }
+
+    setHasVentasForTarget((count ?? 0) > 0)
+    setDeleteTarget(product)
   }
 
   async function confirmDelete() {
@@ -159,36 +175,33 @@ export function ProductsScreen() {
     setIsDeleting(true)
     setDeleteError(null)
 
-    const { count, error: countError } = await supabase
-      .from("ventas")
-      .select("id", { count: "exact", head: true })
-      .eq("producto_id", deleteTarget.id)
+    if (hasVentasForTarget) {
+      const { error } = await supabase
+        .from("productos")
+        .update({ activo: false })
+        .eq("id", deleteTarget.id)
 
-    if (countError) {
-      setDeleteError("No se pudo verificar el producto. Intenta de nuevo.")
-      setIsDeleting(false)
-      return
-    }
+      if (error) {
+        setDeleteError("No se pudo desactivar el producto. Intenta de nuevo.")
+        setIsDeleting(false)
+        return
+      }
+    } else {
+      const { error } = await supabase
+        .from("productos")
+        .delete()
+        .eq("id", deleteTarget.id)
 
-    if (count && count > 0) {
-      setDeleteError("Este producto tiene ventas registradas y no puede eliminarse.")
-      setIsDeleting(false)
-      return
-    }
-
-    const { error } = await supabase
-      .from("productos")
-      .delete()
-      .eq("id", deleteTarget.id)
-
-    if (error) {
-      setDeleteError("No se pudo eliminar el producto. Intenta de nuevo.")
-      setIsDeleting(false)
-      return
+      if (error) {
+        setDeleteError("No se pudo eliminar el producto. Intenta de nuevo.")
+        setIsDeleting(false)
+        return
+      }
     }
 
     setProducts((prev) => prev.filter((p) => p.id !== deleteTarget.id))
     setDeleteTarget(null)
+    setHasVentasForTarget(null)
     setIsDeleting(false)
   }
 
@@ -297,11 +310,20 @@ export function ProductsScreen() {
               id="delete-modal-title"
               className="mb-1 text-xl font-bold tracking-tight text-foreground"
             >
-              Eliminar producto
+              {hasVentasForTarget ? "Desactivar producto" : "Eliminar producto"}
             </h2>
             <p className="mb-5 text-sm text-muted-foreground">
-              ¿Estás seguro de eliminar{" "}
-              <span className="font-medium text-foreground">{deleteTarget.name}</span>? Esta acción no se puede deshacer.
+              {hasVentasForTarget ? (
+                <>
+                  <span className="font-medium text-foreground">{deleteTarget.name}</span>{" "}
+                  tiene ventas registradas. ¿Deseas desactivarlo? No aparecerá en el inventario ni en nuevas ventas.
+                </>
+              ) : (
+                <>
+                  ¿Eliminar{" "}
+                  <span className="font-medium text-foreground">{deleteTarget.name}</span>? Esta acción no se puede deshacer.
+                </>
+              )}
             </p>
 
             {deleteError && (
@@ -313,7 +335,7 @@ export function ProductsScreen() {
             <div className="flex items-center gap-3">
               <button
                 type="button"
-                onClick={() => { setDeleteTarget(null); setDeleteError(null) }}
+                onClick={() => { setDeleteTarget(null); setDeleteError(null); setHasVentasForTarget(null) }}
                 disabled={isDeleting}
                 className="flex-1 rounded-xl border border-border bg-secondary py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-secondary/80 disabled:opacity-50"
               >
@@ -323,9 +345,11 @@ export function ProductsScreen() {
                 type="button"
                 onClick={confirmDelete}
                 disabled={isDeleting}
-                className="flex-1 rounded-xl bg-destructive py-2.5 text-sm font-medium text-white transition-colors hover:bg-destructive/90 disabled:cursor-not-allowed disabled:opacity-50"
+                className={`flex-1 rounded-xl py-2.5 text-sm font-medium text-white transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${hasVentasForTarget ? "bg-amber-500 hover:bg-amber-500/90" : "bg-destructive hover:bg-destructive/90"}`}
               >
-                {isDeleting ? "Eliminando…" : "Sí, eliminar"}
+                {isDeleting
+                  ? hasVentasForTarget ? "Desactivando…" : "Eliminando…"
+                  : hasVentasForTarget ? "Sí, desactivar" : "Sí, eliminar"}
               </button>
             </div>
           </div>

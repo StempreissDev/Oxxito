@@ -109,6 +109,7 @@ export function SaleModal({ open, onOpenChange, onConfirm, customer }: SaleModal
       const { data, error } = await supabase
         .from("productos")
         .select("*")
+        .or("activo.eq.true,activo.is.null")
         .gt("stock", 0)
 
       if (error) {
