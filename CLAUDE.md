@@ -66,6 +66,16 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=...
 ```
 Both must be set in `.env.local` for the app to connect to Supabase.
 
+### Supabase projects per branch
+Supabase MCP is configured in `.mcp.json` (committed; must never hold a literal token — use `${SUPABASE_ACCESS_TOKEN}` if a token is ever needed). Authenticate with `/mcp` on each new machine.
+
+| Git branch | Supabase project |
+|---|---|
+| `develop` | `oxxito-dev` |
+| `main` | `Oxxito` (production) |
+
+Before any Supabase MCP call, check the current branch and use the matching project (find its id with `list_projects`). Never run schema changes or writes on `Oxxito` from `develop`. Ignore the `AI Chat` project. Keep `.env.local` pointing at the same project as the branch.
+
 ### PWA
 Service worker is disabled in development and active in production (via `@ducanh2912/next-pwa`). The manifest is at `public/manifest.json`.
 
